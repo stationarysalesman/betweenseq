@@ -5,6 +5,51 @@ import os
 import argparse
 
 
+def get_runs(indices, distances, max_dist):
+    """Recursively process indices list to return a list
+    of frames in which a repeat sequence could potentially 
+    mediate a deletion.
+    
+    precondition: indices is a sorted list"""
+    
+    start = 0
+    x = 0 # index
+    dist_len = len(distances)
+
+    # base cases
+    if dist_len == 1:
+        if distances[0] > max_dist:
+            return None
+        else:
+            return indices
+    if not (indices or distances):
+        return
+
+    # recursive case
+    while (x < dist_len and distances[x] <= max_dist):
+        x += 1
+
+    # done
+    if (x == dist_len):
+        return indices
+    
+    if start == x: # No good runs
+        return get_runs(indices[1:], distances[1:], max_dist)
+    else:
+        if x == 1: # only one good, need to check return before building list
+            item = indices[0:2]
+            recurse = get_runs(indices[x:], distances[x:], max_dist)
+            if not recurse:
+                return
+            return [item, recurse]
+
+        else:
+            item = indices[0:x]
+            recurse = get_runs(indices[x:], distances[x:], max_dist)
+            if not recurse:
+                return item
+            return [item, recurse]
+    
 def process_index_list(index_list):
     """Remove repeats from index_list that are too far apart.
 
@@ -26,19 +71,19 @@ def process_index_list(index_list):
     
     while (x < len(index_list)):
         new_list.append(index_list[x] - index_list[x-1])
+        x += 1
 
-    old_list_index = 0 # will keep track of current spot in old list
-    for index in new_list:
-        if index > max_dist:
-            # TODO: implement pair analysis algorithm (recursive)
-            pass
-    return None # placeholder
+    # helper function
+    return get_runs(index_list, new_list, max_dist)
             
 def verify_indices(repeats):
     """Verify that any repeat sequences are not too far apart."""
     for k in repeats.keys():
         index_list = repeats[k]
-        process_index_list(index_list)
+        # remove indices that are too far apart
+        repeats[k] = process_index_list(index_list)
+    return repeats
+
 def remove_tandems(index_list):
     i = 0
     # Find tandem repeats by removing adjacent repeat frames
@@ -71,7 +116,7 @@ def get_frame_repeats(seq, frame_size):
         else:
             repeats[seq_frag] = list()
             repeats[seq_frag].append(x)
-        x += frame_size
+        x += 1
     # Remove tandem repeats and simple sequence repeats
     # note: we can change this later if we want all of this data
     # repeats = process_repeats(repeats, frame_size)
@@ -94,14 +139,15 @@ def get_repeats(seq_file, frame_min, frame_max):
         repeats = get_frame_repeats(seq_seq, x)
 
         # TODO: format output
-        
+        if not repeats:
+            return
         print "Repeats in sequence", seq_id + " (frame_size = "+str(x) + "):"
         for k in repeats.keys():
             lst = repeats[k]
-            if (len(lst) > 1):
+            if (lst and len(lst) > 1):
                 print str(k) + ": " + str(repeats[k])
         
-
+    return
     
 def main():
     """Controller for analysis work flow. """
@@ -114,9 +160,13 @@ def main():
     FRAME_MAX = 10
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory', type=str, help="directory containing sequences to analyze")
+    parser.add_argument('file', type=str, help="file containing sequences to analyze")
+    #parser.add_argument('--group', type=str, help="analyze a group of sequences")
+    #parser.add_argument('--format', type=str, help="specify sequence file format")
     args = parser.parse_args()
-    seq_dir = args.directory
+    seq_dir = args.file
+    #group = args.group
+    #file_format = args.format
     if not(os.access(seq_dir, os.EX_OK)):
         print ERR_NO_DIR, seq_dir
         return -1

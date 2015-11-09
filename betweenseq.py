@@ -168,23 +168,30 @@ def check_bitmap(bitmap, seq_frag, index):
 
     
     y = len(seq_frag)
-    index_range_list = range(index, len(seq_frag)+1) # inlude last index
+    index_range_list = range(index, y+1) # inlude last index
     
     
     
     if (index+y > bitmap.size()):
         return False
-    
-    for x in range(index, index+y+1):
+
+    # Check a range of values in the bitmap
+    return bitmap.test_range(index_range_list)
         
 
-    
+
+def update_bitmap(bitmap, lst, frame_size):
+    """Set a range of values equal to frame_size 
+    in a bitmap according to indices in lst and 
+    frame_size."""
+    for index in lst:
+        bitmap.set_range(range(index, index+frame_size))
+
 def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
     """Store all indices of repeated sequences in a dictionary,
     with the sequence fragment as the key and a list of indices as the value."""
 
     repeats = BetweenSeqMaps.get_repeat_dict() # Dictionary to store our repeats
-    subsequences = BetweenSeqMaps.get_subsequences_dict() # Dictionary to store sub-repeats
     frame_min = BetweenSeqMaps.get_frame_min()
     frame_max = BetweenSeqMaps.get_frame_max()
     bitmap = BetweenSeqMaps.get_bitmap()
@@ -194,10 +201,15 @@ def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
     while (x < len(seq) - frame_size):
         # Hash the current frame and check for collisions
         seq_frag = str(seq[x:x+frame_size])
-        check = check_bitmap(bitmap, seq_frag, x)
+        if check_bitmap(bitmap, seq_frag, x): # already something there
+            x += 1
+            continue
+        
         if seq_frag in repeats: # repeated sequence element
             repeats[seq_frag].append(x)
-            update_bitmap(
+            # Update bitmap
+            update_bitmap(bitmap, repeats[seq_frag], len(seq_frag))
+            
         else:
             repeats[seq_frag] = list()
             repeats[seq_frag].append(x)
@@ -222,7 +234,7 @@ def get_repeats(seq_file, frame_min, frame_max):
     
     for x in range(frame_max+1, frame_min, -1): # +1 to include max frame size
         get_frame_repeats(BetweenSeqMaps, seq_seq, x)
-
+        repeats = BetweenSeqMaps.get_repeat_dict()
         # TODO: format output
         if not repeats:
             return

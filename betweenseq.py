@@ -3,8 +3,18 @@
 from Bio import SeqIO
 import os
 import argparse
+from repeatsequences import RepeatSequences
 
 
+def is_tandem(seq_str):
+    """Return true if seq_str is a string of repeated nucleotides."""
+    x = 0
+    while (x<len(seq_str)-1):
+        if (seq_str[x] != (seq_str[x+1])):
+            return False
+        x += 1
+    return True
+        
 def get_runs(indices, distances, max_dist):
     """Recursively process indices list to return a list
     of frames in which a repeat sequence could potentially 
@@ -65,7 +75,7 @@ def process_index_list(index_list):
     if the current one is within the distance of the next one,
     we don't kick it out prematurely."""
 
-    max_dist = 100 # maximum nucleotide length allowed between repeat sequences
+    max_dist =  60 # maximum nucleotide length allowed between repeat sequences
     new_list = list() # build a new list with distances between indices
     x = 1 # start index at 2nd element and compare to previous
     
@@ -79,6 +89,9 @@ def process_index_list(index_list):
 def verify_indices(repeats):
     """Verify that any repeat sequences are not too far apart."""
     for k in repeats.keys():
+        if (is_tandem(k)):
+            del(repeats[k])
+            continue
         index_list = repeats[k]
         # remove indices that are too far apart
         repeats[k] = process_index_list(index_list)
@@ -99,20 +112,92 @@ def process_repeats(repeats, frame_size):
     for repeat_seq in repeats:
         index_list = repeats[repeat_seq]
         new_list = remove_tandems(index_list)
+
+    return
+
+
+def list_intersection(a_, b_):
+    """Return the set intersection of two sets obtained from two lists."""
+    set_a = set(a_)
+    set_b = set(b_)
+    return set_a & set_b
+    
+def get_subseq_by_frame_size(subseq_frame_size, seq_frag, subsequences, index_list):
+    """Helper for get_frame_repeats. Determine if subsequences of 
+    size subseq_frame_size have been found at index x in dictionary
+    subsequences."""
+
+    ret = False
+    
+    for x in range(len(seq_frag)):
+        subseq = seq_frag[x:x+subseq_frame_size]
+        # Check if the subsequence has been seen, and occurred at index
+        if subseq in subsequences:
+            subseq_indices = subsequences[subseq]
+            if list_intersection(subseq_indices, index_list):
+                ret = True
+            else:
+                subsequences[subseq].append(x)
+        else:
+            subsequences[subseq] = list()
+            subsequences[subseq].append(x)
+        x += 1
+
+    return ret
+
+
+def find_sub_repeats(seq_frag, frame_min, subsequences, index_list):
+    """Determine if any subsequences in seq_frag have been encountered
+    around this index.
+
+    index: """
+
+    x = 0
+    ret = False
+    start_size = len(seq_frag)-1
+    for subseq_frame_size in range(start_size, frame_min, -1):
+        ret = get_subseq_by_frame_size(subseq_frame_size, seq_frag, subsequences, index_list) or ret
         
-def get_frame_repeats(seq, frame_size):
+    return ret
+            
+
+
+def check_bitmap(bitmap, seq_frag, index):
+    """Return whether the sequence fragment at location index
+    is covered by another repeat sequence."""
+
+    
+    y = len(seq_frag)
+    index_range_list = range(index, len(seq_frag)+1) # inlude last index
+    
+    
+    
+    if (index+y > bitmap.size()):
+        return False
+    
+    for x in range(index, index+y+1):
+        
+
+    
+def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
     """Store all indices of repeated sequences in a dictionary,
     with the sequence fragment as the key and a list of indices as the value."""
 
-    repeats = dict() # Dictionary to store our repeats
+    repeats = BetweenSeqMaps.get_repeat_dict() # Dictionary to store our repeats
+    subsequences = BetweenSeqMaps.get_subsequences_dict() # Dictionary to store sub-repeats
+    frame_min = BetweenSeqMaps.get_frame_min()
+    frame_max = BetweenSeqMaps.get_frame_max()
+    bitmap = BetweenSeqMaps.get_bitmap()
+    
     x = 0 # index into array of nucleotides in sequence
 
     while (x < len(seq) - frame_size):
         # Hash the current frame and check for collisions
         seq_frag = str(seq[x:x+frame_size])
-
+        check = check_bitmap(bitmap, seq_frag, x)
         if seq_frag in repeats: # repeated sequence element
             repeats[seq_frag].append(x)
+            update_bitmap(
         else:
             repeats[seq_frag] = list()
             repeats[seq_frag].append(x)
@@ -133,10 +218,10 @@ def get_repeats(seq_file, frame_min, frame_max):
     seq_id = seq_file.id
     seq_seq = seq_file.seq
 
-    # Dictionary that will store repeats
-    repeats = dict()
-    for x in range(frame_min, frame_max+1): # +1 to include max frame size
-        repeats = get_frame_repeats(seq_seq, x)
+    BetweenSeqMaps = RepeatSequences(len(seq_seq), frame_min, frame_max)
+    
+    for x in range(frame_max+1, frame_min, -1): # +1 to include max frame size
+        get_frame_repeats(BetweenSeqMaps, seq_seq, x)
 
         # TODO: format output
         if not repeats:
@@ -153,34 +238,29 @@ def main():
     """Controller for analysis work flow. """
 
     # Define error strings
-    ERR_NO_DIR = "ERROR: directory not accessible:"
+    ERR_NO_FILE = "ERROR: file not accessible:"
 
     # Miscellaneous program varibles
-    FRAME_MIN = 5
-    FRAME_MAX = 10
+    FRAME_MIN = 6
+    FRAME_MAX = 8
+    file_format = "genbank" # default
     
     parser = argparse.ArgumentParser()
     parser.add_argument('file', type=str, help="file containing sequences to analyze")
-    #parser.add_argument('--group', type=str, help="analyze a group of sequences")
-    #parser.add_argument('--format', type=str, help="specify sequence file format")
+    # parser.add_argument('--group', type=str, help="analyze a group of sequences")
+    parser.add_argument('--format', type=str, help="specify sequence file format")
     args = parser.parse_args()
-    seq_dir = args.file
-    #group = args.group
-    #file_format = args.format
-    if not(os.access(seq_dir, os.EX_OK)):
-        print ERR_NO_DIR, seq_dir
+    seq_file = args.file
+    # group = args.group
+    if args.format:
+        file_format = args.format
+    if not(os.access(seq_file, os.R_OK)):
+        print ERR_NO_FILE, seq_file
         return -1
-
-    seq_list = list()
-    for dirName, subdirList, fileList in os.walk(seq_dir):
-        for f in fileList:
-            seq_list.append(seq_dir+f)
-        
     
-    for seq in seq_list:
-        seq_file = SeqIO.read(seq, "genbank")
-        get_repeats(seq_file, FRAME_MIN, FRAME_MAX)
-        
-    return
+    seq = SeqIO.read(seq_file, file_format)
+    get_repeats(seq, FRAME_MIN, FRAME_MAX)
+
+    return 0
 
 main()

@@ -93,6 +93,8 @@ def verify_indices(repeats):
             del(repeats[k])
             continue
         index_list = repeats[k]
+        if not index_list:
+            continue
         # remove indices that are too far apart
         repeats[k] = process_index_list(index_list)
     return repeats
@@ -168,17 +170,13 @@ def check_bitmap(bitmap, seq_frag, index):
 
     
     y = len(seq_frag)
-    index_range_list = range(index, y+1) # inlude last index
-    
-    
-    
+    index_range_list = range(index, index+y+1) # inlude last index
     if (index+y > bitmap.size()):
         return False
 
     # Check a range of values in the bitmap
     return bitmap.test_range(index_range_list)
         
-
 
 def update_bitmap(bitmap, lst, frame_size):
     """Set a range of values equal to frame_size 
@@ -213,6 +211,7 @@ def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
         else:
             repeats[seq_frag] = list()
             repeats[seq_frag].append(x)
+            
         x += 1
     # Remove tandem repeats and simple sequence repeats
     # note: we can change this later if we want all of this data
@@ -232,7 +231,7 @@ def get_repeats(seq_file, frame_min, frame_max):
 
     BetweenSeqMaps = RepeatSequences(len(seq_seq), frame_min, frame_max)
     
-    for x in range(frame_max+1, frame_min, -1): # +1 to include max frame size
+    for x in range(frame_max, frame_min-1, -1): # +1 to include max frame size
         get_frame_repeats(BetweenSeqMaps, seq_seq, x)
         repeats = BetweenSeqMaps.get_repeat_dict()
         # TODO: format output

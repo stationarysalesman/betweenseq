@@ -6,7 +6,7 @@ import argparse
 from repeatsequences import RepeatSequences
 
 
-def is_tandem(seq_str):
+def is_ssr(seq_str):
     """Return true if seq_str is a string of repeated nucleotides."""
     x = 0
     while (x<len(seq_str)-1):
@@ -89,7 +89,7 @@ def process_index_list(index_list):
 def verify_indices(repeats):
     """Verify that any repeat sequences are not too far apart."""
     for k in repeats.keys():
-        if (is_tandem(k)):
+        if (is_ssr(k)):
             del(repeats[k])
             continue
         index_list = repeats[k]
@@ -99,14 +99,6 @@ def verify_indices(repeats):
         repeats[k] = process_index_list(index_list)
     return repeats
 
-def remove_tandems(index_list):
-    i = 0
-    # Find tandem repeats by removing adjacent repeat frames
-
-    # TODO: implement this algorithm or check before storing repeats
-    while (i < len(index_list) - 1):
-        while (index_list[i]  == index_list[i+1]):
-            pass
 
 def process_repeats(repeats, frame_size):
     """Remove tandem repeats and simple sequence repeats"""
@@ -116,52 +108,6 @@ def process_repeats(repeats, frame_size):
         new_list = remove_tandems(index_list)
 
     return
-
-
-def list_intersection(a_, b_):
-    """Return the set intersection of two sets obtained from two lists."""
-    set_a = set(a_)
-    set_b = set(b_)
-    return set_a & set_b
-    
-def get_subseq_by_frame_size(subseq_frame_size, seq_frag, subsequences, index_list):
-    """Helper for get_frame_repeats. Determine if subsequences of 
-    size subseq_frame_size have been found at index x in dictionary
-    subsequences."""
-
-    ret = False
-    
-    for x in range(len(seq_frag)):
-        subseq = seq_frag[x:x+subseq_frame_size]
-        # Check if the subsequence has been seen, and occurred at index
-        if subseq in subsequences:
-            subseq_indices = subsequences[subseq]
-            if list_intersection(subseq_indices, index_list):
-                ret = True
-            else:
-                subsequences[subseq].append(x)
-        else:
-            subsequences[subseq] = list()
-            subsequences[subseq].append(x)
-        x += 1
-
-    return ret
-
-
-def find_sub_repeats(seq_frag, frame_min, subsequences, index_list):
-    """Determine if any subsequences in seq_frag have been encountered
-    around this index.
-
-    index: """
-
-    x = 0
-    ret = False
-    start_size = len(seq_frag)-1
-    for subseq_frame_size in range(start_size, frame_min, -1):
-        ret = get_subseq_by_frame_size(subseq_frame_size, seq_frag, subsequences, index_list) or ret
-        
-    return ret
-            
 
 
 def check_bitmap(bitmap, seq_frag, index):
@@ -221,7 +167,7 @@ def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
     repeats = verify_indices(repeats)
     return repeats
 
-def get_repeats(seq_file, frame_min, frame_max):
+def get_repeats(seq_file, frame_max, frame_min):
     """Find repeat sequences for all frame sizes between frame_min and frame_max
     and store them in a dictionary."""
 
@@ -237,14 +183,32 @@ def get_repeats(seq_file, frame_min, frame_max):
         # TODO: format output
         if not repeats:
             return
-        print "Repeats in sequence", seq_id + " (frame_size = "+str(x) + "):"
-        for k in repeats.keys():
-            lst = repeats[k]
-            if (lst and len(lst) > 1):
-                print str(k) + ": " + str(repeats[k])
+        
+    print "Repeats in sequence", seq_id + ":"
+        
+    for k in repeats.keys():
+        lst = repeats[k]
+        if (lst and len(lst) > 1):
+            print str(k) + ": " + str(repeats[k])
+        
         
     return
-    
+
+
+def process_files(seq_path, file_type, frame_max, frame_min, group):
+    """Process a group of sequence files."""
+    if group:
+        seq_lst = list()
+        for dirName, subdirList, fileList in os.walk(seq_path):
+            seq_lst = fileList
+        for seq in seq_lst:
+            seq_file = SeqIO.read(seq_path+seq, file_type)
+            get_repeats(seq_file, frame_max, frame_min)
+
+    else:
+        seq_file = SeqIO.read(seq_path, file_type)
+        get_repeats(seq_file, frame_max, frame_min)
+        
 def main():
     """Controller for analysis work flow. """
 
@@ -258,19 +222,18 @@ def main():
     
     parser = argparse.ArgumentParser()
     parser.add_argument('file', type=str, help="file containing sequences to analyze")
-    # parser.add_argument('--group', type=str, help="analyze a group of sequences")
+    parser.add_argument('-group', help="analyze a group of sequences", action='store_true')
     parser.add_argument('--format', type=str, help="specify sequence file format")
     args = parser.parse_args()
     seq_file = args.file
-    # group = args.group
+    group = args.group
     if args.format:
         file_format = args.format
     if not(os.access(seq_file, os.R_OK)):
         print ERR_NO_FILE, seq_file
         return -1
-    
-    seq = SeqIO.read(seq_file, file_format)
-    get_repeats(seq, FRAME_MIN, FRAME_MAX)
+
+    process_files(seq_file, file_format, FRAME_MAX, FRAME_MIN, group)
 
     return 0
 

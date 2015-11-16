@@ -75,7 +75,7 @@ def process_index_list(index_list):
     if the current one is within the distance of the next one,
     we don't kick it out prematurely."""
 
-    max_dist =  60 # maximum nucleotide length allowed between repeat sequences
+    max_dist = 5000  # maximum nucleotide length allowed between repeat sequences
     new_list = list() # build a new list with distances between indices
     x = 1 # start index at 2nd element and compare to previous
     
@@ -116,7 +116,7 @@ def check_bitmap(bitmap, seq_frag, index):
 
     
     y = len(seq_frag)
-    index_range_list = range(index, index+y+1) # inlude last index
+    index_range_list = range(index, index+y+1) # include last index
     if (index+y > bitmap.size()):
         return False
 
@@ -129,7 +129,7 @@ def update_bitmap(bitmap, lst, frame_size):
     in a bitmap according to indices in lst and 
     frame_size."""
     for index in lst:
-        bitmap.set_range(range(index, index+frame_size))
+        bitmap.set_range(range(index, index+frame_size+1)) # include last index
 
 def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
     """Store all indices of repeated sequences in a dictionary,
@@ -216,8 +216,8 @@ def main():
     ERR_NO_FILE = "ERROR: file not accessible:"
 
     # Miscellaneous program varibles
-    FRAME_MIN = 6
-    FRAME_MAX = 8
+    FRAME_MIN = 5
+    FRAME_MAX = 10
     file_format = "genbank" # default
     
     parser = argparse.ArgumentParser()

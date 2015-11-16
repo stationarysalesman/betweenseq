@@ -6,6 +6,19 @@ import argparse
 from repeatsequences import RepeatSequences
 
 
+class RepeatParameters:
+
+    def __init__(self, seq_path, file_format, maxdist, group, maxframe,
+                 minframe):
+        self.seq_path = seq_path
+        self.file_format = file_format
+        self.maxdist = maxdist
+        self.group = group
+        self.maxframe = maxframe
+        self.minframe = minframe
+        return
+    
+        
 def is_ssr(seq_str):
     """Return true if seq_str is a string of repeated nucleotides."""
     x = 0
@@ -174,7 +187,6 @@ def get_repeats(seq_file, frame_max, frame_min):
     # Get sequence file metadata
     seq_id = seq_file.id
     seq_seq = seq_file.seq
-
     BetweenSeqMaps = RepeatSequences(len(seq_seq), frame_min, frame_max)
     
     for x in range(frame_max, frame_min-1, -1): # +1 to include max frame size
@@ -195,19 +207,27 @@ def get_repeats(seq_file, frame_max, frame_min):
     return
 
 
-def process_files(seq_path, file_type, frame_max, frame_min, group):
+def process_files(params):
     """Process a group of sequence files."""
+
+    # Unpack parameters
+    seq_path = params.seq_path
+    file_format = params.file_format
+    maxframe = params.maxframe
+    minframe = params.minframe
+    group = params.group
+
     if group:
         seq_lst = list()
         for dirName, subdirList, fileList in os.walk(seq_path):
             seq_lst = fileList
         for seq in seq_lst:
-            seq_file = SeqIO.read(seq_path+seq, file_type)
-            get_repeats(seq_file, frame_max, frame_min)
+            seq_file = SeqIO.read(seq_path+seq, file_format)
+            get_repeats(seq_file, maxframe, minframe)
 
     else:
-        seq_file = SeqIO.read(seq_path, file_type)
-        get_repeats(seq_file, frame_max, frame_min)
+        seq_file = SeqIO.read(seq_path, file_format)
+        get_repeats(seq_file, maxframe, minframe)
         
 def main():
     """Controller for analysis work flow. """
@@ -218,22 +238,32 @@ def main():
     # Miscellaneous program varibles
     FRAME_MIN = 5
     FRAME_MAX = 10
-    file_format = "genbank" # default
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('file', type=str, help="file containing sequences to analyze")
-    parser.add_argument('-group', help="analyze a group of sequences", action='store_true')
-    parser.add_argument('--format', type=str, help="specify sequence file format")
+    parser.add_argument('file', type=str,
+                        help="file containing sequences to analyze")
+    parser.add_argument('--format', type=str, default="genbank",
+                        help="specify sequence file format")
+    parser.add_argument('--maxdist', type=int, default=-1,
+                        help="maximum allowable distance between repeats")
+    parser.add_argument('-group', help="analyze a group of sequences",
+                        action='store_true')
+    parser.add_argument('--maxframe', type=int, default=10,
+                        help="maximum size of repeats")
+    parser.add_argument('--minframe', type=int, default=5,
+                        help="minimum size of repeats")
     args = parser.parse_args()
-    seq_file = args.file
-    group = args.group
-    if args.format:
-        file_format = args.format
-    if not(os.access(seq_file, os.R_OK)):
-        print ERR_NO_FILE, seq_file
+
+    # Encapsulate parameters in object
+    params = RepeatParameters(args.file, args.format, args.maxdist,
+                              args.group, args.maxframe, args.minframe)
+    # Error checking
+    if not(os.access(params.seq_path, os.R_OK)):
+        print ERR_NO_FILE, params.seq_path
         return -1
 
-    process_files(seq_file, file_format, FRAME_MAX, FRAME_MIN, group)
+    #Run analysis
+    process_files(params)
 
     return 0
 

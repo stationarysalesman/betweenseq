@@ -133,14 +133,21 @@ def update_bitmap(bitmap, lst, frame_size):
     for index in lst:
         bitmap.set_range(range(index, index+frame_size+1)) # include last index
 
-def add_subseq(BetweenSeqMaps, seq_frag, minframe):
+def add_subseq(BetweenSeqMaps, seq_frag, index, minframe):
     """Add all subsequences of seq_frag to a subsequences dictionary."""
 
     subseq = BetweenSeqMaps.get_subseq_dict()
     maxframe = len(seq_frag)
     for frame_size in range(maxframe-1, minframe-1, -1): # include min size
-        for index in range(maxframe-(maxframe-frame_size)):
-            pass
+        idx = 0
+        while (idx+frame_size < len(seq_frag)+1):
+            seq = seq_frag[idx:idx+frame_size]
+            if not seq in subseq:
+                subseq[seq] = list()
+            if not (index+idx) in subseq[seq]:
+                subseq[seq].append(index+idx)
+            idx += 1
+    return
 
 
 def get_frame_repeats(BetweenSeqMaps, params, seq, frame_size):
@@ -158,7 +165,7 @@ def get_frame_repeats(BetweenSeqMaps, params, seq, frame_size):
         # Hash the current frame and check for collisions
         seq_frag = str(seq[x:x+frame_size])
         if check_bitmap(bitmap, seq_frag, x): # already something there
-            add_subseq(BetweenSeqMaps, seq_frag, params.minframe)
+            add_subseq(BetweenSeqMaps, seq_frag, x, params.minframe)
             x += 1
             continue
         
@@ -197,6 +204,11 @@ def get_repeats(seq_file, params):
         # TODO: format output
         if not repeats:
             return
+
+    # Sort the subsequence dictionary
+    subseqs = BetweenSeqMaps.get_subseq_dict()
+    for k in subseqs:
+        subseqs[k] = sorted(subseqs[k])
         
     print "Repeats in sequence", seq_id + ":"
         
@@ -204,7 +216,14 @@ def get_repeats(seq_file, params):
         lst = repeats[k]
         if (lst and len(lst) > 1):
             print str(k) + ": " + str(repeats[k])
-        
+
+    print "----------------------------"
+    print "Subsequences:"
+    for k in subseqs.keys():
+        lst = subseqs[k]
+        if (lst and len(lst) > 1):
+            print str(k) + ": " + str(subseqs[k])
+
         
     return
 

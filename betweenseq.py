@@ -28,7 +28,7 @@ def is_ssr(seq_str):
         x += 1
     return True
         
-def get_runs(indices, distances, max_dist):
+def get_runs(indices, distances, maxdist):
     """Recursively process indices list to return a list
     of frames in which a repeat sequence could potentially 
     mediate a deletion.
@@ -41,7 +41,7 @@ def get_runs(indices, distances, max_dist):
 
     # base cases
     if dist_len == 1:
-        if distances[0] > max_dist:
+        if distances[0] > maxdist:
             return None
         else:
             return indices
@@ -49,7 +49,7 @@ def get_runs(indices, distances, max_dist):
         return
 
     # recursive case
-    while (x < dist_len and distances[x] <= max_dist):
+    while (x < dist_len and distances[x] <= maxdist):
         x += 1
 
     # done
@@ -57,23 +57,23 @@ def get_runs(indices, distances, max_dist):
         return indices
     
     if start == x: # No good runs
-        return get_runs(indices[1:], distances[1:], max_dist)
+        return get_runs(indices[1:], distances[1:], maxdist)
     else:
         if x == 1: # only one good, need to check return before building list
             item = indices[0:2]
-            recurse = get_runs(indices[x:], distances[x:], max_dist)
+            recurse = get_runs(indices[x:], distances[x:], maxdist)
             if not recurse:
                 return
             return [item, recurse]
 
         else:
             item = indices[0:x]
-            recurse = get_runs(indices[x:], distances[x:], max_dist)
+            recurse = get_runs(indices[x:], distances[x:], maxdist)
             if not recurse:
                 return item
             return [item, recurse]
     
-def process_index_list(index_list):
+def process_index_list(index_list, maxdist):
     """Remove repeats from index_list that are too far apart.
 
     Do this by building a new list that stores the differences
@@ -88,7 +88,6 @@ def process_index_list(index_list):
     if the current one is within the distance of the next one,
     we don't kick it out prematurely."""
 
-    max_dist = 5000  # maximum nucleotide length allowed between repeat sequences
     new_list = list() # build a new list with distances between indices
     x = 1 # start index at 2nd element and compare to previous
     
@@ -97,9 +96,9 @@ def process_index_list(index_list):
         x += 1
 
     # helper function
-    return get_runs(index_list, new_list, max_dist)
+    return get_runs(index_list, new_list, maxdist)
             
-def verify_indices(repeats):
+def verify_indices(repeats, params):
     """Verify that any repeat sequences are not too far apart."""
     for k in repeats.keys():
         if (is_ssr(k)):
@@ -109,18 +108,8 @@ def verify_indices(repeats):
         if not index_list:
             continue
         # remove indices that are too far apart
-        repeats[k] = process_index_list(index_list)
+        repeats[k] = process_index_list(index_list, params.maxdist)
     return repeats
-
-
-def process_repeats(repeats, frame_size):
-    """Remove tandem repeats and simple sequence repeats"""
-
-    for repeat_seq in repeats:
-        index_list = repeats[repeat_seq]
-        new_list = remove_tandems(index_list)
-
-    return
 
 
 def check_bitmap(bitmap, seq_frag, index):
@@ -144,7 +133,17 @@ def update_bitmap(bitmap, lst, frame_size):
     for index in lst:
         bitmap.set_range(range(index, index+frame_size+1)) # include last index
 
-def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
+def add_subseq(BetweenSeqMaps, seq_frag, minframe):
+    """Add all subsequences of seq_frag to a subsequences dictionary."""
+
+    subseq = BetweenSeqMaps.get_subseq_dict()
+    maxframe = len(seq_frag)
+    for frame_size in range(maxframe-1, minframe-1, -1): # include min size
+        for index in range(maxframe-(maxframe-frame_size)):
+            pass
+
+
+def get_frame_repeats(BetweenSeqMaps, params, seq, frame_size):
     """Store all indices of repeated sequences in a dictionary,
     with the sequence fragment as the key and a list of indices as the value."""
 
@@ -159,6 +158,7 @@ def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
         # Hash the current frame and check for collisions
         seq_frag = str(seq[x:x+frame_size])
         if check_bitmap(bitmap, seq_frag, x): # already something there
+            add_subseq(BetweenSeqMaps, seq_frag, params.minframe)
             x += 1
             continue
         
@@ -172,25 +172,27 @@ def get_frame_repeats(BetweenSeqMaps, seq, frame_size):
             repeats[seq_frag].append(x)
             
         x += 1
-    # Remove tandem repeats and simple sequence repeats
-    # note: we can change this later if we want all of this data
-    # repeats = process_repeats(repeats, frame_size)
 
     # verification
-    repeats = verify_indices(repeats)
+    if params.maxdist != -1: # Default value means no maximum distance
+        repeats = verify_indices(repeats, params)
     return repeats
 
-def get_repeats(seq_file, frame_max, frame_min):
+def get_repeats(seq_file, params):
     """Find repeat sequences for all frame sizes between frame_min and frame_max
     and store them in a dictionary."""
 
     # Get sequence file metadata
     seq_id = seq_file.id
     seq_seq = seq_file.seq
-    BetweenSeqMaps = RepeatSequences(len(seq_seq), frame_min, frame_max)
+    # Unpack arguments
+    maxframe = params.maxframe
+    minframe = params.minframe
+
+    BetweenSeqMaps = RepeatSequences(len(seq_seq), minframe, maxframe)
     
-    for x in range(frame_max, frame_min-1, -1): # +1 to include max frame size
-        get_frame_repeats(BetweenSeqMaps, seq_seq, x)
+    for x in range(maxframe, minframe-1, -1): # +1 to include max frame size
+        get_frame_repeats(BetweenSeqMaps, params, seq_seq, x)
         repeats = BetweenSeqMaps.get_repeat_dict()
         # TODO: format output
         if not repeats:
@@ -227,7 +229,7 @@ def process_files(params):
 
     else:
         seq_file = SeqIO.read(seq_path, file_format)
-        get_repeats(seq_file, maxframe, minframe)
+        get_repeats(seq_file, params)
         
 def main():
     """Controller for analysis work flow. """
@@ -235,9 +237,6 @@ def main():
     # Define error strings
     ERR_NO_FILE = "ERROR: file not accessible:"
 
-    # Miscellaneous program varibles
-    FRAME_MIN = 5
-    FRAME_MAX = 10
     
     parser = argparse.ArgumentParser()
     parser.add_argument('file', type=str,
